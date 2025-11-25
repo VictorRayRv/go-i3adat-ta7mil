@@ -23,7 +23,7 @@ func main() {
 	}
 	defer file.Close()
 
-	var outputLines []string
+	var finalLines [][]string
 	scanner := bufio.NewScanner(file)
 
 	lineNumber := 0
@@ -31,29 +31,31 @@ func main() {
 	for scanner.Scan() {
 		lineNumber++
 		line := scanner.Text()
-		words := strings.Fields(line)
+		
+		line = fixingPunc(line)
+		line = fixingQuotes(line)
+		commands, words, combined := separating(line)
+		index := index(combined)
+		words = fixingA(words)
+		applyTransformation(words,commands,lineNumber,index)
 
-		for i := 0; i < len(words); i++ {
-			if strings.HasPrefix(words[i], "(") && strings.HasSuffix(words[i], ",") && i+1 < len(words) {
-				words[i] = words[i] + words[i+1]
-				words = append(words[:i+1], words[i+2:]...)
-			}
-			if strings.HasPrefix(words[i], "(") && strings.Contains(words[i], ",") {
-				words[i] = strings.ReplaceAll(words[i], " ", "")
-			}
-		}
-		applyTransformation(words,lineNumber)
-
-		lineS := strings.Join(words, " ")
-		newLineS := fixingPunc(lineS)
-		newLineS = fixingQuotes(newLineS) 
-		wordsSlice := strings.Fields(newLineS)
-		wordsSlice = fixingA(wordsSlice)
-		newLineS = filtring(wordsSlice)
-		outputLines = append(outputLines, newLineS)
+		finalLines = append(finalLines, words)
 	}
-	err = os.WriteFile(outputFile, []byte(strings.Join(outputLines, "\n")), 0644)
+	filee, err := os.Create(outputFile)
 	if err != nil {
-		fmt.Println("Error writing file:", err)
+		panic(err)
 	}
+	defer filee.Close()
+
+	for _,line := range finalLines {
+	_, err = filee.WriteString(strings.Join(line," "))
+	if err != nil {
+		panic(err)
+	} 
+	_,err = filee.WriteString("\n")
+	if err != nil {
+		panic(err)
+	}
+	}
+	fmt.Println("File created & written successfully!")
 }

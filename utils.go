@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"strconv"
-	"strings"
-	"unicode"
 )
 
 func hexToDecimal(hex string) (string, error) {
@@ -99,19 +97,6 @@ func basedOnNbr(words []string, i int, nbr int, keyWord string,) error {
 	return nil
 }
 
-func extractNumber(word string) (int, error) {
-	numStr := ""
-	for _, r := range word {
-		if r >= '0' && r <= '9' {
-			numStr += string(r)
-		}
-	}
-	if numStr == "" {
-		return 0, fmt.Errorf("no number found in the instance:%q", word)
-	}
-	return strconv.Atoi(numStr)
-}
-
 func capitalize(word string) string {
 	first := word[0]
 	if first >= 'a' && first <= 'z' {
@@ -127,93 +112,68 @@ func capitalize(word string) string {
 	return string(first) + rest
 }
 
-func filtring(words []string) string {
-	cleanWords := []string{}
-	for _, w := range words {
-		if strings.HasPrefix(w, "(") && strings.HasSuffix(w, ")") {
-			continue
-		}
-		cleanWords = append(cleanWords, w)
-	}
-	return strings.Join(cleanWords, " ")
-}
-
-func fixingPunc(text string) string {
-	result := ""
-	runes := []rune(text)
-
-	for i := 0; i < len(runes); i++ {
-		char := runes[i]
-
-		if strings.ContainsRune(".,!?;:", char) {
-
-			if len(result) > 0 && result[len(result)-1] == ' ' {
-				result = result[:len(result)-1]
-			}
-
-			result += string(char)
-
-			if i+1 < len(runes) && unicode.IsLetter(runes[i+1]) {
-				result += " "
-			}
-		} else {
-			result += string(char)
-		}
-	}
-	return result
-}
-
-func fixingQuotes(text string) string {
-	result := ""
-	runes := []rune(text)
-	inQuotes := false
-	
-	for i := 0; i < len(runes); i++ {
-		char := runes[i]
-		if char == '\'' {
-			if !inQuotes {
-				inQuotes = true
-				result += "'"
-				for i+1 < len(runes) && runes[i+1] == ' ' {
-					i++
-				}
-			} else {
-				inQuotes = false
-				if len(result) > 0 && result[len(result)-1] == ' ' {
-					result = result[:len(result)-1]
-				}
-				result += "'"
-			}
-			continue
-		}
-		result += string(char)
-	}
-	return result
-}
-
-func fixingA(words []string) []string {
-	if len(words) == 0 {
-		return words
-	}
-
-	for i := 0 ; i < len(words)-1 ; i++ {
-		if toLower(words[i]) == "a" {
-			next := toLower(words[i+1])
-			if strings.HasPrefix(next,"'") && strings.HasSuffix(next,"'"){
-				next = strings.ReplaceAll(next,"'","")
-			}
-			if startsWithVowelsOrH(next) {
-				words[i] = "an"
-			}
-		}
-	}
-	return words
-}
-
 func startsWithVowelsOrH(word string) bool {
 	if len(word) == 0 {
 		return false
 	}
 	first := rune(word[0])
 	return first == 'a' || first == 'e' || first == 'i' || first == 'o' || first == 'u' || first == 'h'
+}
+
+func commandParsing(str string) Command {
+	for i := 0; i < len(str) ; i++ {
+		if str[i] == ' ' {
+			continue
+		}
+		if str[i] == '(' {
+			j := i + 1 
+
+			name := ""
+			for j < len(str) && str[j] >= 'a' && str[j] <= 'z' {
+				name += string(str[j])
+				j++
+			}
+
+			if name != "cap" && name != "up" && name != "low" && name != "bin" && name != "hex" {
+				continue
+			}
+
+			value := 1 
+
+			if j < len(str) && str[j] == ',' {
+				j++
+				numStr := ""
+
+				for j < len(str) && str[j] >= '0' && str[j] <= '9' {
+					numStr += string(str[j])
+					j++
+				}
+
+				if numStr == "" {
+					return Command{"",0,fmt.Errorf("missing number after comma")}
+				}
+				n,err := strconv.Atoi(numStr)
+				if err != nil {
+					return Command{"",0,fmt.Errorf("invalid number")}
+				}
+				value = n
+			}
+			if j >= len(str) || str[j] != ')' {
+				return Command{"",0,fmt.Errorf("missing closing parenthesis")}
+	
+			}
+			return Command{name, value, nil}
+		}
+	}
+	return Command{"",0,fmt.Errorf("no command found")}
+}
+
+func index(slice []string) int {
+	for i, w := range slice {
+		cmd := commandParsing(w)
+		if cmd.Err == nil {
+			return i
+		}
+	}
+	return 0
 }

@@ -1,56 +1,93 @@
 package main
 
-import ("strings"
-		"fmt")
+import "fmt"
 
-func applyTransformation(words []string,lineNumber int) {
-	var err error
-	for i := 0 ; i < len(words) ; i++ {
-		col := i + 1
-		switch {
-			case words[i] == "(hex)":
-				words[i-1], err = hexToDecimal(words[i-1])
-				if err != nil {
-					fmt.Printf("[line:%d:column:%d] Error:%v\n",lineNumber,i,err)
-				}
-			case words[i] == "(bin)":
-				words[i-1], err = binToDecimal(words[i-1])
-				if err != nil {
-					fmt.Printf("[line:%d:column:%d] Error:%v\n",lineNumber,i,err)
-				}
-			case words[i] == "(up)":
-				words[i-1] = toUpper(words[i-1])
-			case strings.HasPrefix(words[i], "(up,"):
-				nbr, err := extractNumber(words[i])
-				if err != nil {
-					fmt.Printf("[line:%d:column:%d] Error:%v\n",lineNumber,col,err)
-				}
-				err = basedOnNbr(words, i, nbr, "up")
-				if err != nil {
-					fmt.Printf("[line:%d:column:%d] Error:%v\n",lineNumber,col,err)
-				}
-			case words[i] == "(low)":
-				words[i-1] = toLower(words[i-1])
-			case strings.HasPrefix(words[i], "(low,"):
-				nbr, err := extractNumber(words[i])
-				if err != nil {
-					fmt.Printf("[line:%d:column:%d] Error:%v\n",lineNumber,col,err)
-				}
-				err = basedOnNbr(words, i, nbr, "low")
-				if err != nil {
-					fmt.Printf("[line:%d:column:%d] Error:%v\n",lineNumber,col,err)
-				}
-			case words[i] == "(cap)":
-				words[i-1] = capitalize(words[i-1])
-			case strings.HasPrefix(words[i], "(cap,"):
-				nbr, err := extractNumber(words[i])
-				if err != nil {
-					fmt.Printf("[line:%d:column:%d] Error:%v\n",lineNumber,col,err)
-				}
-				err = basedOnNbr(words, i, nbr, "cap")
-				if err != nil {
-					fmt.Printf("[line:%d:column:%d] Error:%v\n",lineNumber,col,err)
-				}
+type Command struct {
+	Name string
+	Value int
+	Err error
+}
+
+func separating(line string) ([]Command, []string, []string) {
+	combined := []string{}
+	words := []string{}
+	commands := []Command{}
+	runes := []rune(line)
+	i := 0
+	word := ""
+
+	for i < len(runes) {
+		if runes[i] == '(' {
+			if word != "" {
+				combined = append(combined, word)
+				words = append(words, word)
+				word = ""
 			}
+
+			cmdStr := ""
+			for i < len(runes) && runes[i] != ')' {
+				cmdStr += string(runes[i])
+				i++
+			}
+			if i < len(runes) && runes[i] == ')' {
+				cmdStr += ")"
+				i++
+			}
+
+			cmd := commandParsing(cmdStr)
+			combined = append(combined, cmdStr)
+			commands = append(commands, cmd)
+			
+		} else if runes[i] == ' ' {
+			if word != "" {
+				combined = append(combined, word)
+				words = append(words, word)
+				word = ""
+			}
+			i++
+		} else {
+			word += string(runes[i])
+			i++
+		}
+	}
+
+	if word != "" {
+		combined = append(combined, word)
+		words = append(words, word)
+	}
+
+	return commands, words , combined
+}
+
+
+func applyTransformation(words []string,commands []Command, lineNumber int, index int) {
+	for _,cmd := range commands {
+		if cmd.Err != nil {
+			continue
+		}
+
+		col := index+1
+
+		switch cmd.Name {
+		case "cap", "up" , "low" :
+			err := basedOnNbr(words, index, cmd.Value, cmd.Name)
+			if err != nil {
+				fmt.Printf("[line:%d:column:%d] Error:%v\n", lineNumber,col, err)
+			}
+		case "hex":
+			newWord, err := hexToDecimal(words[index-1])
+			if err != nil {
+				fmt.Printf("[line:%d:column:%d] Error:%v\n", lineNumber,col, err)
+			} else {
+				words[index-1] = newWord
+			}
+		case "bin":
+			newWord, err := binToDecimal(words[index-1])
+			if err != nil {
+				fmt.Printf("[line:%d:column:%d] Error:%v\n", lineNumber,col, err)
+			} else {
+				words[index-1] = newWord
+			}
+		}
 	}
 }
